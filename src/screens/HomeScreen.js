@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from "react";
+import React, { useState, useLayoutEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,27 +7,39 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../config/supabase";
+import { readProducts, deleteProduct } from "../services/ProductService";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function HomeScreen({ navigation }) {
-  const [products, setProducts] = useState([
-    {
-      id: "1",
-      description: "Smart TV Samsung 50 polegadas",
-      price: 2900.0,
-      image:
-        "https://a-static.mlcdn.com.br/1500x1500/smart-tv-50-4k-uhd-led-samsung-50du7700-wi-fi-bluetooth-alexa-3-hdmi/magazineluiza/238245000/458132cb7c4ad98839480f8c7e73f9dc.jpg",
-    },
-    {
-      id: "2",
-      description: "Smart TV LG 50 polegadas",
-      price: 2300.0,
-      image:
-        "https://assets.betalabs.net/fit-in/760x760/filters:fill(white)/production/projetocasaecompanhia/item-images/0054dcbe579ed18f90f0bd10030217d0.png",
-    },
-  ]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      getProducts();
+    }, [])
+  );
+
+  async function getProducts() {
+    setLoading(true);
+    const userId = await getUserId();
+    const { products, error } = await readProducts(userId);
+
+    if (error) {
+      console.error(error.message);
+      Alert.alert("Erro", error.message);
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+
+    setProducts(products);
+    setLoading(false);
+  }
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -50,6 +62,11 @@ export default function HomeScreen({ navigation }) {
     });
   }, []);
 
+  async function getUserId() {
+    const user = await supabase.auth.getUser();
+    return user.data.user.id;
+  }
+
   const handleDelete = (id) => {
     Alert.alert(
       "Excluir produto",
@@ -59,7 +76,21 @@ export default function HomeScreen({ navigation }) {
         {
           text: "Excluir",
           style: "destructive",
-          onPress: () => setProducts(products.filter((p) => p.id !== id)),
+          onPress: async () => {
+            const userId = await getUserId();
+            const response = await deleteProduct(userId, id);
+
+            if (response.error) {
+              Alert.alert("Erro", response.error);
+              return;
+            }
+
+            setProducts((prevProducts) =>
+              prevProducts.filter((product) => product.id !== id)
+            );
+
+            //getProducts();
+          },
         },
       ]
     );
@@ -88,6 +119,14 @@ export default function HomeScreen({ navigation }) {
       </View>
     </View>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#4e73df" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

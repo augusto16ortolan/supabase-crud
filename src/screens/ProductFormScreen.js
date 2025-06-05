@@ -11,6 +11,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 
+import { createProduct, updateProduct } from "../services/ProductService";
+import { supabase } from "../config/supabase";
+
 export default function ProductFormScreen({ navigation, route }) {
   const editingProduct = route.params?.product;
 
@@ -29,8 +32,13 @@ export default function ProductFormScreen({ navigation, route }) {
     });
   }, []);
 
-  const handleSave = () => {
-    if (!description.trim() || !price.trim() || !image.trim()) {
+  async function getUserId() {
+    const user = await supabase.auth.getUser();
+    return user.data.user.id;
+  }
+
+  const handleSave = async () => {
+    if (!description.trim() || !price.trim()) {
       Alert.alert("Campos obrigatórios", "Preencha todos os campos.");
       return;
     }
@@ -43,16 +51,37 @@ export default function ProductFormScreen({ navigation, route }) {
 
     setLoading(true);
 
-    setTimeout(() => {
-      Alert.alert(
-        "Sucesso",
-        editingProduct ? "Produto atualizado!" : "Produto cadastrado!"
-      );
+    const userId = await getUserId();
 
-      navigation.goBack();
+    let response = null;
+    if (editingProduct) {
+      response = await updateProduct(userId, editingProduct.id, {
+        description,
+        price: priceNumber,
+        image,
+      });
+    } else {
+      response = await createProduct(userId, {
+        description,
+        price: priceNumber,
+        image,
+      });
+    }
 
+    if (response.error) {
+      Alert.alert("Erro", response.error);
       setLoading(false);
-    }, 1000);
+      return;
+    }
+
+    Alert.alert(
+      "Sucesso",
+      editingProduct ? "Produto atualizado!" : "Produto cadastrado!"
+    );
+
+    navigation.goBack();
+
+    setLoading(false);
   };
 
   return (
